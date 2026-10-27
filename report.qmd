@@ -8,6 +8,8 @@ format:
     embed-resources: true
 ---
 
+Generated with Claude, but with human input and feedback before this version was produced.
+
 ## Executive summary
 
 **The numbers**
