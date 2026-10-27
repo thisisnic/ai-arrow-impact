@@ -1,0 +1,443 @@
+---
+title: "The Impact of AI-Generated PRs on Arrow"
+date: 2026-10-27
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+---
+
+## Executive summary
+
+**The numbers**
+
+- PRs from accounts with nothing merged went from 2 to 13 a month in 2025 to 106 in October 2026, over half of all PRs opened that month. None of the 106 has merged.
+- Only 18% of PRs since the disclosure checkboxes landed claim to be entirely human-written; a third delete the section.
+- Reviewers have spent 527 messages on new-contributor PRs that are open or closed, against 13 on ones that merged. 50 open new-contributor PRs have had no human response at all.
+- The load falls on the two or three committers who already do most of the merging. The merge Contributor Absence Factor has been 2 for 18 months.
+
+**What we have done**
+
+- AI policy (Jan), PR template links (Feb), Copilot auto-review (Apr), a cap of 3 concurrent PRs for non-committers (Sep), disclosure checkboxes (Sep). Reviewer guidance is proposed in #55260.
+- The cap rate-limits (44 auto-closures) but does not deter, and 13 closures hit established contributors. The checkboxes are ignored by a third of submitters. Copilot adds a quarter to a third of review traffic that maintainers then adjudicate.
+
+**What is still broken**
+
+- Maintainer time and goodwill are going to PRs that will never merge, and it shows in review tone.
+- Bots reply to reviews claiming changes they have not made; one PR cost 38 reviewer messages before this was caught.
+- Genuine newcomers now meet suspicion by default, and non-committer reviewers doing the triage have no tools to close or label.
+- Every measure so far reduces inflow. None adds review capacity.
+
+**What I recommend next**
+
+1. Move the PR cap to `.asf.yaml` `creation_cap` before `pull_request_target` is disabled in November (#55164).
+2. Make disclosure mandatory, as numpy, pandas and matplotlib do, with a bot that drafts PRs missing it.
+3. Adopt #55260's rule against AI-written review replies, and rok's neutral `needs-author-engagement` label rather than an AI label.
+4. Auto-draft PRs idle for 14 days with conflicts, failing CI or changes requested, and trial fork-hosted CI for non-committer PRs as DataFusion and arrow-rs do.
+5. Gate `take` on triage state as pandas does, so PRs are only expected against issues a maintainer has confirmed.
+6. Track monthly: new-contributor PRs with no human response, and reviewer messages on PRs that never merge.
+7. Grow the merge group from the people already triaging: give the active non-committer reviewers the collaborator role and a label-triggered autoclose, and treat that as the path to committer. This is the only measure that adds capacity rather than cutting inflow.
+
+::: {.callout-note title="Sources and method"}
+Figures come from two places, all as of 27 October 2026:
+
+- A full dump of every `apache/arrow` PR opened since 1 April 2026 (1,153 PRs) with all issue comments, reviews and review-thread comments, pulled via the GitHub GraphQL API. "Since April" below means this dataset.
+- The daily `arrow-gh-cache` Parquet files (open and closed PRs and issues, list-level) for the longer history back to 2025. The active-contributor and merge-concentration figures are computed from these files using two metrics from the CHAOSS Practitioner Guide: Active Contributors (anyone who opened a PR or issue in the prior 90 days, bots excluded) and the Contributor Absence Factor (the minimum number of people whose absence would remove half of a quarter's merged PRs). The window for those is Q2 2025 to the current partial quarter.
+
+"New contributor" means GitHub author association `NONE` or `FIRST_TIME_CONTRIBUTOR`, i.e. someone with nothing merged in the repo. Comments are linked directly where a quote is used.
+:::
+
+## What do the numbers say?
+
+### How many AI-generated PRs, and how can we tell?
+
+There is no reliable way to count AI-generated PRs directly. Three proxies are available, and they agree on the shape of the problem.
+
+**Self-disclosure.** Since the disclosure checkboxes landed in the PR template on 16 September 2026 ([#51282](https://github.com/apache/arrow/pull/51282)), 286 PRs have been opened. Of those:
+
+| Disclosure ticked | PRs | Merged | Closed unmerged | Still open |
+|---|---|---|---|---|
+| AI only | 67 | 9 | 27 | 31 |
+| Human + AI | 69 | 26 | 12 | 31 |
+| Human only | 52 | 42 | 2 | 8 |
+| Section deleted / not filled | 98 | 19 | 34 | 45 |
+
+Only 52 of 286 PRs (18%) claim to be written entirely by a human. The "section deleted" group is the one to watch: a third of submissions strip the template altogether, and they are closed at the same rate as the "AI only" group.
+
+**Author association.** The cleanest signal is the volume of PRs from accounts that have never had anything merged. Through 2025 this ran at 2 to 13 a month. It has been the fastest-growing category in 2026 and is now the majority of incoming PRs.
+
+| Month | All PRs | From never-merged authors | Share | Distinct such accounts | Merged |
+|---|---|---|---|---|---|
+| 2025 (monthly avg) | ~130 | ~7 | ~5% | ~6 | 0–1 |
+| 2026-01 | 212 | 34 | 16% | 14 | 1 |
+| 2026-07 | 234 | 39 | 17% | 21 | 1 |
+| 2026-08 | 147 | 25 | 17% | 20 | 1 |
+| 2026-09 | 199 | 47 | 24% | 30 | 0 |
+| 2026-10 | 200 | 106 | 53% | 46 | 0 |
+
+Weekly, the October figures are 36 and 40 such PRs in the weeks of 12 and 19 October against 3 to 8 a week in August. The jump in January 2026 was the first wave; it subsided through spring and returned from July.
+
+**Reviewer judgement.** Since April, humans have asked an author to fill in the template, disclose AI use, or read the AI policy on 43 distinct PRs. Those requests rose from 2 a month in April to 18 in October. Kou wrote 22 of them.
+
+### How many new contributors?
+
+First-ever PR authors per month (cache, bots excluded):
+
+| 2025 avg | 2026-01 | 2026-04 | 2026-07 | 2026-08 | 2026-09 | 2026-10 |
+|---|---|---|---|---|---|---|
+| 15 | 26 | 22 | 36 | 31 | 43 | 45 |
+
+Over the last 12 months, 324 people opened their first PR to Arrow. Of those first PRs, 129 (40%) were merged, 66 were closed without merging and 129 are still open. The surge since July is the striking part: an average of 37 first-time contributors a month in the last three complete months, against 19 a month before that. The number of first PRs merged each month has risen too, but most of the increase is in PRs that remain open.
+
+The same surge shows up in the 90-day active-contributor count. That pool shrank steadily for over a year, from 185 at the start of Q2 2025 to a low of 141 in June 2026, continuing the contraction that followed the dissolution of Voltron Data in 2024. It has since rebounded sharply to 212, the highest point in the window. The recovery is driven largely by first-time contributors rather than by returning regulars, so it is too early to say whether it represents a durable increase in the contributor base.
+
+### How many contributors return after merging a PR?
+
+Of people whose first merged PR was in a given year, the share who opened another PR afterwards:
+
+| Year of first merge | People | Returned | Share |
+|---|---|---|---|
+| 2022 | 162 | 98 | 60% |
+| 2023 | 193 | 94 | 49% |
+| 2024 | 154 | 52 | 34% |
+| 2025 | 126 | 44 | 35% |
+| 2026 (to date) | 123 | 54 | 44% |
+
+Retention halved between 2022 and 2024, before the AI wave, so this is not an AI effect in itself. The 2026 figure is inflated because people who merged recently have had less time to leave. The relevant point for this report is that almost none of the 2026 surge reaches the "merged" stage at all: none of the 106 never-merged-author PRs opened in October has been merged, and the only first-time-contributor merge since April took 1.6 days, so the pipeline is not blocked for people who engage.
+
+### Abandoned PRs
+
+Since April, 276 PRs are still open. Among new-contributor PRs:
+
+- 50 open PRs have had no human response at all (listed in the appendix). Of the 102 new-contributor PRs opened in October, 56 have no human response.
+- 47 open PRs have a reviewer as the last person to speak and the author silent for more than 14 days; 25 of those are from first-time contributors.
+- Median time to first human response for new-contributor PRs was 0.2 days in July, 1.7 in August and 6.5 in September, before dropping back to 1.1 in October because so many October PRs were closed on sight.
+
+Taking the longer view, the 129 still-open first-ever PRs from the last 12 months break down as:
+
+| State | PRs | Share | Definition |
+|---|---|---|---|
+| No review | 22 | 17% | No human response at all |
+| Abandoned | 18 | 14% | Reviewed, author silent for over 90 days |
+| Stale risk | 36 | 28% | Some engagement, no maintainer response for over 6 weeks |
+| Active | 11 | 9% | Activity in the past 4 weeks |
+| Recent | 42 | 33% | Opened in the past 6 weeks |
+
+The majority of open first-timer PRs have had some engagement. The two groups that need attention are the 22 that nobody has responded to and the 36 that received a review but have since gone quiet. The 18 abandoned PRs could reasonably be closed. Across the 247 first-timer PRs that did get a human response in the last 12 months, the median time to first response was 1.1 days, 75% were answered within 5.5 days, and the slowest took 194 days.
+
+## How is it affecting maintainers and the project?
+
+### Maintainer frustration and distraction
+
+The clearest evidence is in the tone of the comments. A selection, in date order:
+
+- pitrou, on a Python kernel PR where a Member had let an agent reply to review comments: ["You or your agent?"](https://github.com/apache/arrow/pull/50430#issuecomment-5120608791) and the next day, to a second Member who had posted agent-written review comments: ["I'd appreciate if you did actual human code reviews instead of letting your agent post for you."](https://github.com/apache/arrow/pull/50430#issuecomment-5133544953)
+- rok, to a contributor on a Python PR: ["are you actually reading this thread or are you using an agent?"](https://github.com/apache/arrow/pull/50368#issuecomment-5095143055)
+- rok, on a C++ compute PR: ["A philosophical question perhaps: how can verify that you, the physical person, did manually verify these and it's not just your agent trying to convince me?"](https://github.com/apache/arrow/pull/50675#discussion_r3664561740)
+- AlenkaF, explaining why they opened their own PR instead of reviewing a newcomer's: ["the process seems very similar to other reviews where quite a lot of time is needed to communicate with the contributor (or the contributor's agent) what would be good to change. Decided to fix this quickly by myself."](https://github.com/apache/arrow/pull/51404#issuecomment-5759018395)
+- pitrou, after three weeks on a ListView cast PR: ["Are you an AI? I guess I'm getting tired of interacting with you. Unless you start behaving like a human, I will just close this PR."](https://github.com/apache/arrow/pull/50976#issuecomment-5717081119)
+- kou, on a one-line bot PR: ["This is an AI-slop."](https://github.com/apache/arrow/pull/51358#issuecomment-5706691859) and the next day, when asked to review: ["Can we ping you in non AI-slop PRs?"](https://github.com/apache/arrow/pull/51380#issuecomment-5726569385)
+- raulcd, apologising to a newcomer for slow review: ["Sorry, we are pretty overwhelmed with AI PRs and it takes as a long time to tackle reviews so we appreciate your patience."](https://github.com/apache/arrow/pull/51630#pullrequestreview-5611217925)
+- adamreeve, on a Parquet encryption PR: ["It took me a while to parse this AI speak"](https://github.com/apache/arrow/pull/54884#issuecomment-6355524159)
+- raulcd, on a contributor PR this week: ["Having a 300 lines description full of AI written fluff does not help at all."](https://github.com/apache/arrow/pull/55270#pullrequestreview-5664252570)
+
+AI-flavoured noise is not limited to PR authors. In August a non-committer account began approving PRs across unrelated parts of the codebase, in at least one case approving a PR that still needed work ([#50837](https://github.com/apache/arrow/pull/50837)). When thisisnic asked why, the reply was that the comments were ["coming off unusually hostile"](https://github.com/apache/arrow/pull/50954#issuecomment-5482471906); kou [argued non-committer reviews should be welcomed](https://github.com/apache/arrow/pull/50954#issuecomment-5416865334), while pitrou [shared the concern](https://github.com/apache/arrow/pull/50954#issuecomment-5481898592). How AI was involved was never established, but the pattern (mass approvals with no substantive comment, [a non-committer approval mistakable for a committer's intent to merge](https://github.com/apache/arrow/pull/50954#issuecomment-5411334237)) came up again in later discussions and is part of why #55260 is being written.
+
+The distraction cost also shows up as the policing work described above (43 PRs needing a template or policy reminder since April) and in reviewers stepping outside their component: Reranko05 now routinely posts ["pls use the AI disclosure checklist as given in the Arrow PR template"](https://github.com/apache/arrow/pull/53949#issuecomment-6222047794) on new PRs, and jorisvandenbossche closed two Python PRs on sight with ["Fully automated PRs are not welcome"](https://github.com/apache/arrow/pull/53971#issuecomment-6215951706).
+
+### Poor-quality PRs that are not merged still take maintainer time
+
+Since April, 93 new-contributor PRs have been closed without merge. Human reviewers posted 148 messages on them. The median is zero because most are closed on sight, but the distribution has a long tail:
+
+| PR | Reviewer messages before close | What happened |
+|---|---|---|
+| [#50976](https://github.com/apache/arrow/pull/50976) ListView cast | 38 | HuaHuaY and pitrou reviewed for 3 weeks; pitrou closed it after finding the author [claimed to have merged two loops and had not](https://github.com/apache/arrow/pull/50976#issuecomment-5718173188) |
+| [#50310](https://github.com/apache/arrow/pull/50310) ArrayData::GetSpan | 11 | pitrou asked ["are you generating these tests with AI? did you review them before pushing?"](https://github.com/apache/arrow/pull/50310#discussion_r3527695131); author: ["i didn't understand that cases thats why used ai"](https://github.com/apache/arrow/pull/50310#discussion_r3528927952); superseded by a Contributor's PR |
+| [#49833](https://github.com/apache/arrow/pull/49833) arithmetic dunders | 11 | superseded by a near-duplicate from another contributor the next day |
+| [#51133](https://github.com/apache/arrow/pull/51133) Flight SQL is_update | 10 | ennuite (not a committer) reviewed for 7 weeks, found a commit that ["does not contain the changes you said it had"](https://github.com/apache/arrow/pull/51133#pullrequestreview-5134573152), got the author to admit to ["just pasting bot responses"](https://github.com/apache/arrow/pull/51133#issuecomment-5820448616), coached it to working state, then the author [closed it to stay under the PR limit](https://github.com/apache/arrow/pull/51133#issuecomment-6283947728) |
+
+Across all new-contributor PRs since April, reviewers have posted 379 messages on PRs that are still open, 148 on PRs that were closed, and 13 on PRs that merged.
+
+### Poor-quality PRs that do merge take longer
+
+Median days from open to merge since April:
+
+| Author group | n | Median days |
+|---|---|---|
+| Member | 355 | 1.1 |
+| Collaborator | 94 | 2.1 |
+| Contributor | 241 | 7.2 |
+| Disclosed "Human only" (since 16 Sep) | 42 | 0.7 |
+| Disclosed "Human + AI" | 26 | 2.6 |
+| Disclosed "AI only" | 9 | 1.8 |
+
+The nine merged "AI only" PRs are from four Members (rok, wgtmac, kszucs, CurtHagenlocher) and five established Contributors who reviewed their own agent's output, so time-to-merge does not separate the good from the bad here. The better measure of cost is review wording: adamreeve on a merged Parquet PR, ["It's pretty common for AI to generate comments like this that compare the new code to the old way it was done, but I don't think these are helpful to leave in the code"](https://github.com/apache/arrow/pull/51362#discussion_r4031249699); pitrou trimming a Contributor's description himself: ["I've trimmed the verbosity from the PR message (was it AI-generated?)"](https://github.com/apache/arrow/pull/51021#issuecomment-5481310409). In the last two days alone pitrou asked three authors (two of them Members) to shorten AI-written descriptions "for human consumption" ([#54959](https://github.com/apache/arrow/pull/54959#issuecomment-6422251851), [#55170](https://github.com/apache/arrow/pull/55170#issuecomment-6414135002), [#54582](https://github.com/apache/arrow/pull/54582#issuecomment-6438889258)). Median PR body length since the template change is 1,439 characters for "AI only" PRs against 582 for "Human only".
+
+### Burst PR opening
+
+Concrete cases since September (all closed, mostly by the limit bot or on sight):
+
+- One account opened 10 PRs between 21:33 and 21:34 on 11 October against 10 unrelated issues dating back to 2023 ([#53254](https://github.com/apache/arrow/pull/53254) to [#53263](https://github.com/apache/arrow/pull/53263)).
+- One account opened 11 PRs in 30 hours on 14–15 October, including three identical PRs for GH-45847 and two identical PRs for GH-39149.
+- One account opened 10 PRs between 16 and 27 October on top of three already open; each was auto-closed by the limit bot.
+- One account opened three Archery/Dev PRs in 31 minutes on 15 October; kou closed the last with ["We don't need all AI generated PRs (no human reviewed PRs)."](https://github.com/apache/arrow/pull/53870#issuecomment-6207180061)
+- Three one-line `MINOR` PRs in one minute on 16 September from an account raulcd described as an ["AI slop bot"](https://github.com/apache/arrow/pull/51358#issuecomment-5710466248); he noted the fixes were real but that merging would grant the account CI-trigger rights.
+
+### Issue sniping
+
+Of 182 new-contributor PRs since June that reference an issue, 47 were opened within six hours of the issue being created and 64 within 24 hours. Many of those issues were filed by committers intending to do the work themselves:
+
+- kou filed GH-50726 and GH-50674; the same newcomer account opened PRs within 1.2 and 1.4 hours. The second ([#50677](https://github.com/apache/arrow/pull/50677)) had a title about Yum repositories and a body about Ubuntu 24.04 verification jobs; kou replied ["You should read \[the AI policy\] carefully."](https://github.com/apache/arrow/pull/50677#issuecomment-5101120182)
+- pitrou filed GH-50659, GH-50657 and GH-50735; PRs from newcomers arrived in 2.0, 2.2 and 3.3 hours.
+- jorisvandenbossche filed GH-51301; a PR arrived in 10 hours, and AlenkaF ended up doing it themselves ([#51404](https://github.com/apache/arrow/pull/51404)).
+- thisisnic filed good-first-issue GH-51659; a PR arrived in 4.7 hours.
+- hiroyuki-sato, HuaHuaY, rok, tadeja and Reranko05 all had issues picked up within a day.
+
+Rok described this pattern on the dev list: "an issue opened by a regular contributor with the intent of immediately working on it will sometimes get a PR opened against it within an hour or two. The newly opened PR will typically come from a new contributor and is likely AI-generated." ([thread](https://lists.apache.org/thread/fsfply47z9rb6bz0x50b2whlhg6hnflr))
+
+Since April, 43 issues have PRs from more than one author. Examples: GH-53500 has PRs from three different newcomer accounts in ten days; GH-51669 had two successive AI-written attempts, the second of which pitrou judged ["wrong (and so was the previous attempt)"](https://github.com/apache/arrow/pull/54884#issuecomment-6342493385).
+
+### Maintainers' own AI use is leaking into reviews
+
+The second-order effect is that committers are now also mediated by agents, and other committers are pushing back:
+
+- pitrou to rok, above: ["actual human code reviews instead of letting your agent post for you"](https://github.com/apache/arrow/pull/50430#issuecomment-5133544953). rok's own PRs now carry notes like "this PR is purely AI generated. I will mark as ready for review once I review myself."
+- pitrou asked a Member who had posted review comments on a Python PR: ["For the record, are these comments AI-generated? Did you vet them for correctness?"](https://github.com/apache/arrow/pull/50327#issuecomment-4926061083)
+- Herb Sutter's shared_ptr PR ([#51270](https://github.com/apache/arrow/pull/51270)) was generated by a Claude skill; pitrou found ["deficiencies in how the AI reasoned about the code"](https://github.com/apache/arrow/pull/51270#issuecomment-5616100882), and the author conceded ["what I told Claude is not consistent with what I teach"](https://github.com/apache/arrow/pull/51270#issuecomment-5646006241). It has been closed and reopened three times and is still open.
+- thisisnic on an R PR: ["this is me doing a crap job of reviewing AI code; I'm redoing this and being more thorough about my checking."](https://github.com/apache/arrow/pull/49653#issuecomment-4187447074)
+- pearu, on a CSV PR: ["sorry for this noise, Claude was too eager to post comments, it is better restrained now."](https://github.com/apache/arrow/pull/50146#issuecomment-4668970610)
+
+This matters because the people reviewing newcomers are the same two or three people who do most of the merging (see the next section: kou merges 28–44% of PRs in any quarter; pitrou wrote 255 inline review comments in September alone).
+
+### Authorship is spreading, merge capacity is not
+
+The Contributor Absence Factor (CAF) is the minimum number of people whose absence would remove half of a quarter's merged PRs. Measured on who *writes* merged PRs, it has improved:
+
+| Quarter | CAF | Authors with a merged PR | Merged PRs | Top author | Top author's share |
+|---|---|---|---|---|---|
+| Q2 2025 | 5 | 77 | 345 | kou | 15.9% |
+| Q3 2025 | 5 | 60 | 246 | kou | 25.2% |
+| Q4 2025 | 5 | 68 | 346 | kou | 13.9% |
+| Q1 2026 | 5 | 60 | 350 | kou | 16.6% |
+| Q2 2026 | 6 | 66 | 258 | thisisnic | 12.4% |
+| Q3 2026 | 7 | 111 | 380 | hiroyuki-sato | 8.7% |
+| Q4 2026 (to date) | 11 | 42 | 71 | kou | 8.5% |
+
+For most of the window five people accounted for half of all merged PRs each quarter, with kou the largest single author every quarter through Q1 2026. In the two most recent complete quarters the CAF rose to 7, and the number of distinct authors with a merged PR grew from 77 to 111. The same handful of names (kou, raulcd, pitrou, thisisnic) remain at the top of every quarter.
+
+Measured on who *merges* PRs, the picture is far more concentrated and has not moved:
+
+| Quarter | Merge CAF | People who merged anything | Merges | Top merger | Top merger's share |
+|---|---|---|---|---|---|
+| Q2 2025 | 2 | 22 | 355 | kou | 43.9% |
+| Q3 2025 | 2 | 19 | 254 | kou | 39.8% |
+| Q4 2025 | 2 | 17 | 356 | kou | 37.1% |
+| Q1 2026 | 2 | 13 | 355 | kou | 38.3% |
+| Q2 2026 | 3 | 18 | 268 | kou | 28.4% |
+| Q3 2026 | 2 | 17 | 394 | kou | 32.2% |
+| Q4 2026 (to date) | 2 | 14 | 72 | kou | 36.1% |
+
+The merge CAF has been 2 in almost every quarter: kou alone merges between 28% and 44% of all PRs in a given quarter, and kou plus one other committer (usually pitrou) account for roughly half. Only 13 to 22 people merged anything in any given quarter. Contributors can open PRs freely, but landing them depends on two or three committers, and the recent growth in authorship has not been matched by any growth in the group doing the merging.
+
+Read together with the active-contributor rebound to 212 above, the project is measuring more people opening PRs without any growth in the group able to land them. The risk is fragility at the top, not a lack of interest at the bottom: if one of the two or three most active committers stepped back, review and merge throughput would fall immediately, and the current wave of new contributors would be the first to feel it.
+
+## What have we done so far to try to fix it?
+
+In date order:
+
+| Date | Measure | Reference |
+|---|---|---|
+| 28 Jan 2026 | AI-generated code section in the contributor docs: PRs "that appear to be fully generated by AI with little to no engagement from the author may be closed without further review"; be upfront about AI use; only submit if you can own the changes | [#48952](https://github.com/apache/arrow/pull/48952) |
+| 4 Feb 2026 | Link to that guidance in the PR template and new-contributor guide | [#49131](https://github.com/apache/arrow/pull/49131) |
+| Apr–May 2026 | GitHub Copilot review trialled manually by kou from April (38 Copilot reviews in April), then auto-enabled; kou's rationale on dev@: "we don't have enough PR review resources for now. GitHub Copilot review may help this situation" ([thread](https://lists.apache.org/thread/thq0dz19shxbrjypb81q5ltx8h0w54ob)); raulcd after two weeks: "useful for non draft PRs... Having Copilot adding comments for every commit feels like a waste of resources" | |
+| 27 May 2026 | Docs updated to ask for AI disclosure on mailing-list messages too | [#49277](https://github.com/apache/arrow/pull/49277) |
+| 14 Jun 2026 | Copilot tuned: skip drafts, be concise, "high-impact only", one comment per issue; tell first-time contributors to "check and address all review comments" | [#50117](https://github.com/apache/arrow/pull/50117), `.github/copilot-instructions.md` |
+| Jul 2026 onwards | AGENTS.md proposals for root, R, C++ and Python (all still open or closed) | [#50375](https://github.com/apache/arrow/pull/50375), [#50343](https://github.com/apache/arrow/pull/50343), [#50365](https://github.com/apache/arrow/pull/50365), [#50626](https://github.com/apache/arrow/pull/50626) |
+| 11 Aug 2026 | dev@ discussion proposing a cap of 3 concurrent PRs for non-committers; analysis showed non-committers have a mean of 1.43 and median of 1 open PRs | [thread](https://lists.apache.org/thread/fsfply47z9rb6bz0x50b2whlhg6hnflr) |
+| 14 Sep 2026 | `pr_limit.yml` workflow: contributors without repo access limited to 3 open PRs; excess auto-closed with a comment citing "the increase in pull requests opened by AI bots" | [#51200](https://github.com/apache/arrow/pull/51200) |
+| 15 Sep 2026 | Collaborators exempted after the bot closed a collaborator's PRs | [#51332](https://github.com/apache/arrow/pull/51332) |
+| 16 Sep 2026 | Disclosure checkboxes ("PR code and description written by: Human / AI"; "Reviewed before submission by: Human / AI / Not reviewed") added to the PR template | [#51282](https://github.com/apache/arrow/pull/51282) |
+| 18 Sep 2026 | dev@ thread revived by Pedro Matias asking for reviewer guidelines on "how to handle low-quality PRs with weak engagement"; rok proposed a `needs-author-engagement` label | [thread](https://lists.apache.org/thread/kbx7b5ghdgd1d02vwst8p0g5g4zd4rfw) |
+| 26 Oct 2026 | PR adding reviewer guidance and a canned "excessive AI usage" message, with the option to close and/or label | [#55260](https://github.com/apache/arrow/pull/55260) |
+
+## What is the impact of these changes?
+
+### Limit of 3 concurrent PRs
+
+- 44 PRs auto-closed since 14 September (10 in September, 34 in October), from 18 accounts. Two accounts account for 17 of them.
+- It is working as a rate limiter but not as a deterrent: the account that opened 10 PRs in twelve days simply kept going, each one bounced.
+- False positives are real. 13 of the 44 closures hit established Contributors or Collaborators: pearu lost five PRs in one day on 19 October (a related batch of strptime fixes), plus rustyconover, lriggs, gitedmond, 1fanwang, andishgar, Arawoof06 and Reranko05 (the Collaborator exemption was added the next day as a result).
+- Perverse effect: a newcomer whose PR a reviewer had spent seven weeks on [closed it themselves](https://github.com/apache/arrow/pull/51133#issuecomment-6283947728) "to stay within the concurrent PR limit and focus on other active contributions".
+- The weekly volume of new-contributor PRs did not fall after the limit: 3–8 a week in August, 12–19 a week in September apart from one quiet week of 4, 36–40 in mid-October.
+- Operational note: `pull_request_target` is being disabled for ASF repositories in November 2026 ([Jarek Potiuk, dev@](https://lists.apache.org/thread/6bgpcflsqow9b9b3r022yyf135m63352)), so this workflow needs to move to the `.asf.yaml` `creation_cap` setting. That setting merged ASF-wide on 21 September ([infrastructure-asfyaml#111](https://github.com/apache/infrastructure-asfyaml/pull/111)); rok's switch-over PR ([#55164](https://github.com/apache/arrow/pull/55164), 23 Oct, marked do-not-merge) is waiting on the bypass-list follow-up [infrastructure-asfyaml#135](https://github.com/apache/infrastructure-asfyaml/pull/135) so collaborators stay exempt.
+
+### AI guidelines
+
+- Unclear is the right word. The guidelines are cited constantly (on 43 PRs since April) but mostly as a closing or warning message, not as something contributors read first. kou on #50117: "I think that most contributors don't read our documentation carefully... So notifying it by a PR comment may be better than documentation."
+- They do give reviewers a sanctioned way to disengage, and that is now being used: "Fully automated PRs are not welcome" ([raulcd](https://github.com/apache/arrow/pull/53948#issuecomment-6216035403), [jorisvandenbossche](https://github.com/apache/arrow/pull/53971#issuecomment-6215951706)), ["AI bot, closing."](https://github.com/apache/arrow/pull/53689#issuecomment-6263033816) (pitrou), ["We don't need AI only contribution."](https://github.com/apache/arrow/pull/55243#issuecomment-6397061163) (kou), and thisisnic's templated close on [nine PRs on 12–13 October](https://github.com/apache/arrow/pull/53261#issuecomment-6128108464).
+- 21 of the 93 closed new-contributor PRs since April were closed with the policy explicitly cited.
+- Non-committer reviewers still have no sanctioned escalation path, which is what the Pedro Matias thread and #55260 are trying to fix.
+
+### Disclosure checkboxes
+
+- They are honoured by the people who were already honest: of 67 "AI only" disclosures, 27 are already closed and 9 merged, and the merged ones are from regulars. One newcomer disclosed, when asked, that ["Both the code and the PR description were written by an AI coding agent and reviewed by an AI agent before submission"](https://github.com/apache/arrow/pull/51394#issuecomment-5744268949) and the PR was closed on that basis.
+- A third of PRs (98 of 286) delete or ignore the section, so it cannot be used for auto-closing without a bot that checks for it.
+- Lying is possible but has not been the main failure mode; the main failure mode is ignoring the template entirely, which is itself a useful tell (pitrou now opens with ["Why didn't you reuse the PR template? Are you using an AI?"](https://github.com/apache/arrow/pull/50844#issuecomment-5717661769)).
+- Known UI wart: GitHub renders the boxes as a task list, so PRs show "2 of 5 tasks completed" ([Reranko05](https://github.com/apache/arrow/pull/51282#issuecomment-5696650786)).
+
+### Copilot auto-review
+
+- Volume since April: 1,309 Copilot reviews on 434 PRs, 1,033 inline threads. In July that was 328 Copilot reviews against 815 human ones, roughly a quarter to a third of all review traffic.
+- Maintainers spend time adjudicating it. pitrou on one Gandiva PR asked ["Is Copilot right here?"](https://github.com/apache/arrow/pull/51266#discussion_r3969594022) three times; raulcd called it hallucinating on three separate PRs ([#50195](https://github.com/apache/arrow/pull/50195#discussion_r3976709352), [#50406](https://github.com/apache/arrow/pull/50406#discussion_r3545127506), [#50407](https://github.com/apache/arrow/pull/50407#discussion_r4323862970)); rok asked for Copilot threads to be resolved because they are ["noisy to read"](https://github.com/apache/arrow/pull/50430#issuecomment-5071922363).
+- It blocks contributors: ["Is it possible to merge this? It's been a long time. The comments from copilot don't seem to stop."](https://github.com/apache/arrow/pull/49813#issuecomment-4667163939)
+- When #50117 told first-time contributors to address every Copilot comment, pitrou objected: ["Asking people to respond to Copilot comments is one more hurdle for contributors."](https://github.com/apache/arrow/pull/50117#discussion_r3380731725) and ["I think Arrow core developers are less likely to hallucinate than an LLM."](https://github.com/apache/arrow/pull/50117#discussion_r3386792606)
+- It does catch real things (pitrou: "I think Copilot is right that csv/chunker.cc must be fixed as well"; AntoinePrv and viirya both fixed bugs it flagged), and one newcomer was impressed: ["Honestly impressed the LLM review had such good context. Good bot"](https://github.com/apache/arrow/pull/49771#issuecomment-4277011925). The net effect is unmeasured.
+- Side effect: Copilot is not a committer, so label-triggered CI runs it would start do not trigger ([thisisnic](https://github.com/apache/arrow/pull/50488#issuecomment-5558223182)).
+
+## What are the key problems that still exist?
+
+### Putting off potential regular contributors
+
+- The default stance toward newcomers has shifted to suspicion. First messages on PRs now include ["This is AI-generated, right?"](https://github.com/apache/arrow/pull/54884#issuecomment-6311172644), ["Are you using AI to submit PRs?"](https://github.com/apache/arrow/pull/51698#issuecomment-6414325100) and ["Is this an AI response?"](https://github.com/apache/arrow/pull/50976#discussion_r3861148942).
+- Some of those land on humans. One contributor had to reply ["No, none of this was 'AI' generated, I have put the effort and typed it all by myself."](https://github.com/apache/arrow/pull/48963#issuecomment-3871096056)
+- The limit bot has closed PRs from at least eight genuine contributors.
+- Genuine newcomers who do engage are competing for the same reviewer time: the median first response for newcomers went from under a day to 6.5 days in September.
+- Some accounts are explicitly shopping for responsiveness: ["Closing — maintaining focus on responsive repositories."](https://github.com/apache/arrow/pull/49520#issuecomment-4071480922)
+
+### Ignoring the disclosure template
+
+- 98 of 286 PRs since 16 September removed or ignored the section (34% of submissions). Reviewers are asking for it by hand ([example](https://github.com/apache/arrow/pull/53949#issuecomment-6222047794)); there is no automation.
+- wgtmac predicted this when the checkboxes were proposed: ["I would expect that sometimes even the PR description is written by AI. We can tell the submitters to respect the PR template if not properly written."](https://github.com/apache/arrow/pull/51282#issuecomment-5620214968)
+
+### Bots responding and claiming to have made changes they have not
+
+This is the most expensive failure mode because it consumes reviewer time proportional to reviewer good faith:
+
+- ["the commit you made does not contain the changes you said it had"](https://github.com/apache/arrow/pull/51133#pullrequestreview-5134573152) (ennuite)
+- ["the fact that you claim to have finally 'updated the kernel to fold the contiguity check directly into the primary destination offset calculation loop' - but you didn't. There are still two separate loops"](https://github.com/apache/arrow/pull/50976#issuecomment-5718173188) (pitrou)
+- ["your responses don't indicate to me that you are reading what I am writing or what you are posting"](https://github.com/apache/arrow/pull/51133#issuecomment-5765039670) (ennuite)
+- ["please, don't use agents to communicate with us. It is OK to use the tools for development provided you understand the changes."](https://github.com/apache/arrow/pull/50024#issuecomment-5343646102) (AlenkaF)
+- ["Please do not copy paste agent output here. The goal is that you understand what you're doing and that you learn from it."](https://github.com/apache/arrow/pull/50907#issuecomment-5398364709) (rok)
+- ["perhaps ask your agent to take a step back and re-trace the steps and re-evaluate the blind spots"](https://github.com/apache/arrow/pull/54059#discussion_r4369301994) (dmitry-chirkov-dremio, now addressing the agent directly)
+
+### Review capacity is the constraint, and it is two people
+
+Every measure so far reduces inflow; none increases review capacity. The complement to everything in this report is to grow the group of people who review and merge rather than only the group who open PRs. The most direct route is to give the non-committer reviewers already doing the policing and coaching (see below) the collaborator role, so they can close and label, and to treat that as the path to committer.
+
+### Labels versus drama
+
+#55260 proposes a label "indicating excessive AI usage"; thisisnic argued a negative label ["would create unnecessary drama"](https://github.com/apache/arrow/pull/55260#discussion_r4380176428) and suggested a positive one reviewers can filter on instead. rok's `needs-author-engagement` proposal is deliberately not about AI but about observable understanding.
+
+### CI cost
+
+Every PR that gets workflow approval runs Arrow's CI, and the project is under ASF scrutiny for shared-runner minutes ([dev@ thread, 22 Oct](https://lists.apache.org/thread/6bgpcflsqow9b9b3r022yyf135m63352)). raulcd flagged the specific risk that merging a bot's trivial fix grants that account CI-trigger rights on all its subsequent PRs.
+
+### Non-committer reviewers are absorbing the load without tools
+
+ennuite, Reranko05 and Pedro Matias are doing much of the policing and the long-tail coaching but cannot close or label. #55260 only partly addresses this.
+
+### Agents are also filing the issues
+
+36 of the 182 issue-linked newcomer PRs since June link an issue the same account filed, typically minutes earlier, which bypasses the "issue first, then PR" convention as a quality gate.
+
+## What other projects are doing
+
+All seven peers hit the same wave in 2026 and converged on a similar toolkit within a few months of each other. Nobody has published outcome data; every cap was adopted between August and October 2026 "as a starting point". The ASF-wide `creation_cap` setting in `.asf.yaml` merged on 21 September 2026 ([infrastructure-asfyaml#111](https://github.com/apache/infrastructure-asfyaml/pull/111), opened by Jarek Potiuk: "We need to have some tools to at least attempt to fight with the AI slop"); a bypass-list follow-up ([#135](https://github.com/apache/infrastructure-asfyaml/pull/135)) is still open and is what Arrow's own switch ([#55164](https://github.com/apache/arrow/pull/55164)) is waiting on.
+
+| Measure | airflow | datafusion | arrow-rs | arrow-go | numpy | pandas | matplotlib | apache/arrow |
+|---|---|---|---|---|---|---|---|---|
+| Written AI policy | Jan 2026 | Oct 2025, expanded Oct 2026 | May 2026, defers to Arrow's | none | Mar 2026 | Jan 2026, tightened Aug 2026 | 2025, agents banned Feb 2026 | Jan 2026 |
+| Disclosure in PR template | opt-in checkbox + `Generated-by:` | none | none | none | mandatory; must write "No AI tools used" | forced two-way checkbox incl. model, version, effort | always-filled section | Human/AI checkboxes, optional |
+| Bans AI speaking for the author in review | implicit | yes | no | no | yes | yes | yes | no (proposed in #55260) |
+| Bans autonomous agent PRs | proposed, not adopted | discouraged | no | no | yes | agents told not to act | yes | no |
+| Guidance for AI-assisted reviews | Copilot instructions | yes | no | no | no | no | no | proposed in #55260 |
+| Concurrent PR cap (non-committers) | 5, `.asf.yaml`, Sep 2026 | 3 non-draft, `.asf.yaml`, Oct 2026 | 3 non-draft, `.asf.yaml`, Oct 2026 | none | 2 non-draft, GitHub setting + allow-list, Aug 2026 | intended, unverified | "one at a time" for first PR | 3, custom workflow, Sep 2026 |
+| Auto-close or auto-draft on non-engagement | stale 45d; `pending-response` 7d+7d | draft after 14d idle with conflicts/failing CI/changes requested | stale 60d+7d | none | announced, not found | author-inactivity 14d → stale, +7d close | label-triggered 14d autoclose | generic stale bot |
+| Issue assignment rule | none, "better PR wins" | optional `take` | optional `take` | optional `take` | none | **must** be assigned via `/take`, max 2; declined on `Needs Triage` / `Needs Info` / `Needs Discussion` issues | none; good-first-issues humans only | `take` bot |
+| Escalation / ban process | documented | "treated as spam and closed" | informal | none | "reject" | ban after 2 violations | ban or report to GitHub | "may be closed without further review" |
+
+### apache/airflow
+
+The most complete toolkit, and the project that drove the ASF-level cap.
+
+- Gen-AI policy in [`contributing-docs/05_pull_requests.rst`](https://github.com/apache/airflow/blob/main/contributing-docs/05_pull_requests.rst) (9 Jan 2026): "maintainers may close the PR (or all of that contributor's open PRs) with a comment pointing to this section... Repeated disregard of the Gen-AI guidelines is treated the same way as any other sustained disruptive behaviour", with a documented [community escalation process](https://github.com/apache/airflow/blob/main/COMMUNITY_ESCALATION.md) (May 2026) running from feedback, to closing PRs and locking, to PMC block, to ASF Infra org-level block.
+- Cap of 5 via `.asf.yaml` (25 Sep 2026) after a [dev-list lazy consensus](https://lists.apache.org/thread/y0vzry5s55k2gy17rc93632zp0d5733o) with 46 messages. The rationale doc [`32_open_pull_request_limit.rst`](https://github.com/apache/airflow/blob/main/contributing-docs/32_open_pull_request_limit.rst): "When we had around 100 open Pull Requests, we could promise... at least an initial review for each of them. With more than 1,000 open Pull Requests, that promise is impossible to keep." Included a one-time scripted closure of existing PRs over the limit, exempting PRs a maintainer had already engaged on.
+- Stopped assigning issues altogether from March 2026 ([`04_how_to_contribute.rst`](https://github.com/apache/airflow/blob/main/contributing-docs/04_how_to_contribute.rst), from the thread ["Stop assigning unknown contributors to issues (AI-slop prevention)"](https://lists.apache.org/thread/slgcqs2csn1fngn65g5srrqn8xtsghn7)): the inverse of the pandas approach. "When this leads to several PRs fixing the same issue, we will merge the best implementation and close the others."
+- Copilot review instructions with an explicit "AI-Generated Code Signals" list ([`.github/instructions/code-review.instructions.md`](https://github.com/apache/airflow/blob/main/.github/instructions/code-review.instructions.md), Feb 2026): fabricated diffs, unrelated files, description not matching code, no evidence of testing, narrating comments, empty descriptions.
+- `pending-response` label: PRs go stale after 7 days and close 7 days later ([`stale.yml`](https://github.com/apache/airflow/blob/main/.github/workflows/stale.yml)).
+- Maintainer-side agentic triage via the apache/magpie `pr-management-triage` skill ([`25_maintainer_pr_triage.md`](https://github.com/apache/airflow/blob/main/contributing-docs/25_maintainer_pr_triage.md)): converts PRs failing quality criteria (including missing Gen-AI disclosure) to draft; `flag-suspicious` closes all of an author's PRs.
+- Not adopted: a June 2026 proposal to forbid agents opening PRs outright ([thread](https://lists.apache.org/thread/g34gx1tv8slorfy9hw7ks8wkkk86nxq0), 48 messages); a "require a human-written summary" template change was merged and reverted the same day pending consensus.
+
+### apache/datafusion
+
+- [AI policy page](https://github.com/apache/datafusion/blob/main/docs/source/contributor-guide/ai-policy.md) (8 Oct 2026): "We welcome AI-assisted PRs from anyone. We do not welcome unreviewed 'AI dumps'"; "Multiple PRs created in a short amount of time, especially by a first-time contributor, that in our judgment show a lack of understanding or author engagement may be treated as spam and closed." On review replies: "reviewers want to talk to **you**, not to your AI tool."
+- The only peer with written guidance for *AI-assisted reviewers*: "read all comments first, remove detail that is unnecessary or you don't understand, and explain the rest in your own words."
+- Cap of 3 non-draft PRs via `.asf.yaml` (4 Oct 2026), decided in [discussion #24413](https://github.com/apache/datafusion/discussions/24413). alamb there: "generating many unreviewed PRs expecting we will review them is similar to spamming an email list... somewhat like stealing attention from others."
+- Auto-draft: PRs with conflicts, failing CI or changes-requested and no activity for 14 days are converted to draft ([`draft_inactive_prs.yml`](https://github.com/apache/datafusion/blob/main/.github/workflows/draft_inactive_prs.yml), 25 Oct 2026; dry run found 69 eligible PRs).
+- Fork CI: the Rust workflow for fork PRs runs on the contributor's fork (20 Oct 2026). alamb on arrow-rs: "moving the CI burden on to their accounts will make a big difference as it will rate limit the fully AI generated PRs."
+- No disclosure field in the PR template; the issue to add one has been open since October 2025.
+- Roadmap issue #26684 (23 Oct 2026): "the rise of AI generated code, especially in the last few months, has been challenging this model... the collective attention of the community has been overwhelmed and we are thrashing."
+
+### apache/arrow-rs
+
+- [`CONTRIBUTING.md`](https://github.com/apache/arrow-rs/blob/main/CONTRIBUTING.md) (May 2026) defers to Arrow's policy and copies its six bullets verbatim.
+- Cap of 3 non-draft PRs via `.asf.yaml` (15 Oct 2026): "The number of open PRs far exceeds our review capacity."
+- PR template (2 Oct 2026): "DO NOT simply paste a list of commands ran to verify the code; this is what our CI is for and it pollutes the PR." No disclosure field.
+- Fork CI (23 Oct 2026); template now says "Before opening this PR, enable CI in your fork".
+- Informal "Prolific Author" label from a script that flags accounts with PRs in more than 20 repositories in the last month ([issue #11808](https://github.com/apache/arrow-rs/issues/11808), 22 Oct 2026); open PRs went from "usually around 70 to 80" to 201. alamb's stated personal priority order: actual users, prior contributors, PRs already approved by others, established accounts; "I no longer plan to spend much time driving someone else's LLM."
+
+### apache/arrow-go
+
+Nothing repo-level: no `creation_cap`, no stale workflow, no AI text in `CONTRIBUTING.md`, no disclosure field. It inherits the Arrow-wide docs by link only.
+
+### numpy
+
+- [AI policy](https://github.com/numpy/numpy/blob/main/doc/source/dev/ai_policy.rst) (4 Mar 2026, based on SciPy's): mandatory disclosure of tool, usage and what is AI-generated; "We will reject any pull request that does not include the disclosure"; no AI-generated descriptions, comments or issue text; "The use of an AI agent that writes code and then submits a pull request autonomously is not permitted."
+- PR template (11 Mar 2026): mandatory "AI Disclosure" section ("If no AI tools were used, please write 'No AI tools used'") and a "First time contributor introduction" section, "to start to build a circle of trust".
+- GitHub cap of 2 non-draft PRs per non-maintainer with an allow-list ("We liberally add contributors who attend the community and triage meetings"), initially 1 ([announcement](http://www.mail-archive.com/numpy-discussion@python.org/msg08691.html), 4 Aug 2026: "a flood of AI-assisted contributions and a lack of developer resources"), raised to 2 after the 12 Aug community meeting.
+- A low-quality/stale PR bot was announced in the same post; no such workflow exists in the repo today.
+
+### pandas
+
+- ["Automated contributions policy"](https://github.com/pandas-dev/pandas/blob/main/doc/source/development/contributing.rst) (27 Jan 2026, tightened 14 Aug 2026): disclose tool, model, version and effort setting ("`claude opus 4.8 (xhigh)` tells us something, `claude` does not"); no AI speaking for you; "Maintainers may also ban users from contributing to pandas who violate these guidelines 2 or more times."
+- PR template forced choice: "I did **not** use AI" or "I used AI... I prompted it to follow `AGENTS.md`, I have reviewed and understood every change, and I have described above how I used it and exactly which tool, model version, and effort setting."
+- [`AGENTS.md`](https://github.com/pandas-dev/pandas/blob/main/AGENTS.md) tells agents never to push, open PRs or reply on the pandas repo on the user's behalf.
+- Issue-assignment gate with custom bots ([`pr-issue-gate.yml`](https://github.com/pandas-dev/pandas/blob/main/.github/workflows/pr-issue-gate.yml), Aug 2026): claim with `/take` (max 2 open issues per contributor, refused on triage-stage labels); a PR not linked to an issue assigned to its author is labelled `Needs Issue Assignment` and "unlikely to be reviewed"; after changes requested, 14 days of author inactivity marks the PR stale and 7 more closes it and unassigns the issue. An auto-close of unassigned PRs was added and then withdrawn after authors found they could not reopen bot-closed PRs.
+
+### matplotlib
+
+- ["Use of Generative AI"](https://github.com/matplotlib/matplotlib/blob/main/doc/devel/contribute.rst) (agents banned 12 Feb 2026, rewritten Apr 2026): unacceptable uses include "External AI tooling (e.g. bots, agents) directly interacting with the project", "Solving topics that you wouldn't be able to solve yourself without AI" and "Increasing breadth of contributions, i.e. simultaneously contributing to several projects"; "We may ban and/or report users to GitHub."
+- PR template "AI Disclosure" section made unconditional in April 2026 because a blank field "might mean that they didn't use AI or it might mean they don't want to declare"; summary field says "in your own words (no AI please)".
+- Autoclose bot borrowed from scikit-learn ([`autoclose_comment.yml`](https://github.com/matplotlib/matplotlib/blob/main/.github/workflows/autoclose_comment.yml), Mar 2026): a maintainer adds `status: autoclose candidate`, the bot warns ("does not yet meet the quality and clarity standards needed for an effective review... Please do not ping (`@`) maintainers"), and closes after 14 days. Deliberately not cleared by new commits: "there's no good way to automatically check that the new commit/comment is an improvement vs. more slop."
+- AgentScan on first-time-contributor PRs ([`pr_welcome.yml`](https://github.com/matplotlib/matplotlib/blob/main/.github/workflows/pr_welcome.yml), 25 Sep 2026) labels PRs `AgentScan: mixed / automated / flagged` without closing; the welcome message asks "Please let us know if (and how) you use AI".
+- First-time contributors asked to finish one PR before opening another; good-first-issues are "intended for human contributors... please do not try to automate a solution using AI"; "We do not assign issues."
+
+### What Arrow does not do that peers do
+
+- A mandatory, always-filled disclosure (numpy's "No AI tools used", matplotlib, pandas' forced choice) rather than optional checkboxes that a third of submitters delete.
+- A written rule against AI-written review replies and guidance for AI-assisted reviewers (datafusion, numpy, pandas, matplotlib). #55260 would add the first part.
+- An explicit ban on autonomous agents opening PRs (numpy, matplotlib, pandas via AGENTS.md).
+- Auto-draft or short-fuse close on author non-engagement (datafusion 14 days idle to draft; airflow 7+7 days on `pending-response`; pandas 14+7 days author inactivity).
+- Copilot review instructions aimed at AI-slop signals rather than general code quality (airflow).
+- A documented escalation and ban threshold (airflow, pandas).
+- Gating work on triage state. pandas' `/take` is declined on issues labelled `Needs Triage`, `Needs Discussion`, `Needs Info` or `Closing Candidate`, and every new issue starts as `Needs Triage`, so nothing is claimable until a maintainer has looked at it. Arrow's `take` bot assigns anything, including issues the same account filed minutes earlier. (airflow went the other way and removed assignment entirely.)
+- Fork-hosted CI for non-committer PRs (datafusion, arrow-rs), which also addresses the shared-runner cost.
+
+Unverified: whether pandas enabled GitHub's cap and at what number; whether numpy's announced bot was built; the outcome of airflow's "forbid agent PRs" thread.
+
+## What else do we want to try?
+
+- AGENTS.md so agents follow our rules and produce better code. Status: root ([#50375](https://github.com/apache/arrow/pull/50375)), R ([#50343](https://github.com/apache/arrow/pull/50343)) and Python ([#50626](https://github.com/apache/arrow/pull/50626)) PRs are open; the C++ one was closed. thisisnic's position on the C++ attempt: ["it'll be better if we figure out what we want to put in and let AI polish it, but not have AI generate it in its entirety."](https://github.com/apache/arrow/pull/50365#issuecomment-4886208256) Worth noting the burst accounts are unlikely to read it; it helps the "human present but outsourcing" group.
+- Move the PR cap to `.asf.yaml` `creation_cap` before `pull_request_target` is disabled in November ([#55164](https://github.com/apache/arrow/pull/55164) is ready once the ASF bypass list lands). Airflow, DataFusion and arrow-rs have already switched; DataFusion and arrow-rs count only non-draft PRs.
+- Consider the peer measures listed under "What Arrow does not do": a mandatory disclosure field, a written rule against AI-written review replies, auto-draft after 14 idle days, and a trial of fork-hosted CI for non-committer PRs. The fork side needs no new code, since Arrow's workflows already trigger on `push` to any branch; the upstream side needs a lint-only guard for fork PRs, a status check that mirrors the fork run, and a merge queue or label-triggered full run as the gate before merging. DataFusion's status bridge uses `pull_request_target` (read-only, no PR code checked out), which needs checking with Infra before the November change.
+- A bot that checks the disclosure section exists and is filled in, and converts the PR to draft or comments if not, so humans stop doing it by hand.
+- rok's `needs-author-engagement` label (dev@ thread, 21 Sep) as the neutral alternative to an AI label.
+- Gate issue claiming on triage state, following pandas: have the `take` bot decline issues without a maintainer's confirmation label, and treat PRs against unassigned issues as not ready for review. The 36 self-filed issue-and-PR pairs and the 43 issues with PRs from more than one author since April are the cases this would catch.
+- Track two numbers monthly: new-contributor PRs with zero human response, and reviewer messages spent on PRs that never merge.
+- A label-triggered autoclose that collaborators can use, following matplotlib's `autoclose_comment.yml`: anyone with triage rights adds an autoclose-candidate label, a bot posts the warning ("does not yet meet the quality and clarity standards needed for an effective review"), and closes after 14 days unless a maintainer removes the label. This is the cheapest way to give ennuite, Reranko05 and Pedro Matias a tool for the sweep they are already doing by comment, and Arrow's `comment_bot.yml` and `stale.yml` are the pieces to build it from.
+- Borrow arrow-rs's prolific-author check ([issue #11808](https://github.com/apache/arrow-rs/issues/11808)): a script that flags accounts with PRs in more than 20 repositories in the last month and applies a label. It catches the burst accounts in this report (10 PRs in two minutes, 11 in 30 hours, three identical PRs for one issue) with a signal that says nothing about AI, and could run in the same workflow as the welcome comment.
+
+## Appendix: open new-contributor PRs with no human response (as of 27 Oct 2026)
+
+50 PRs. Oldest first: #49696, #49954, #49984, #50013, #50049, #50071, #50232, #50607, #50621, #50652, #50711, #50809, #50867, #50882, #50960, #50975, #51017, #51137, #51321, #51375, #51383, #51388, #51400, #51405, #51475, #51631, #51646, #51700, #52358, #53239, #53910, #54457, #54681, #54691, #54782, #54886, #54904, #54909, #54913, #54914, #54917, #54922, #54926, #54938, #54987, #55168, #55244, #55251, #55257, #55280.
